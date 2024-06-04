@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart City Navigation</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        #map {
+            width: 100%;
+            height: 100vh;
+        }
+
+        #userInfo {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 1000;
+            background-color: white;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+
+        #navigationControls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            background-color: white;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+
+        .popup-image {
+            max-width: 100%;
+            max-height: 150px;
+        }
+
+        .more-info {
+            display: none;
+        }
+
+        .more-button {
+            cursor: pointer;
+            color: blue;
+            text-decoration: underline;
+        }
+    </style>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.css" />
+</head>
+<body>
+    <div id="map"></div>
+    <div id="userInfo">Smart City Navigation <span id="username"></span></div>
+    <div id="navigationControls">
+        <input type="text" id="searchInput" placeholder="Search Places">
+        <button onclick="searchPlaces()">Search Places</button>
+        <button onclick="navigateToSelectedPlace()">Navigate</button>
+    </div>
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.js"></script>
+    <script>
+        const places = [
+            { name: "Your Location", location: { latitude: 28.365250339715647, longitude: 77.54094729374357 }, description: "This is your current location.", image: "https://www.collegebatch.com/static/clg-gallery/galgotias-university-greater-noida-224320.jpg" },
+            { name: "Jagat Farm Market", location: { latitude: 28.481951535140045, longitude: 77.50117409474564 }, image: "https://lh5.googleusercontent.com/p/AF1QipPy7heby5w4FMK0P_MeIadsDhX0PkTx4CTUxFGp=w1080-k-no",description: "Jagat Farm is a marketplace.", timing: "Open till 10pm", rating: "4.1" },
+            { name: "City Park", location: { latitude: 28.481645792159, longitude: 77.52083219448936 }, image: "https://live-media-cdn.travalour.com/webp/b517cf69-32e1-11ea-a2af-0ec82d6f8976_600x0",description: "Largest park in greater noida. The landscaping is beautiful & well maintained.", timing: "Open till 6pm", rating: "4.4" },
+            { name: "Alpha-I Commercial Belt", location: { latitude: 28.472506195942263, longitude: 77.50117409474564 }, image: "https://pbs.twimg.com/media/EVFUDWiUcAEkuVQ?format=jpg&name=large",description: "It's a medium and low rise residential area and commercial zone", timing: "Open 24hrs", rating: "4.6" },
+            { name: "The Grand Venice Mall", location: { latitude: 28.459301267060432, longitude: 77.51831261212858 }, image: "https://digital.ihg.com/is/image/ihg/crowne-plaza-greater-noida-8223749250-2x1",description: "The Grand Venice Mall, is an Italian-themed shopping mall in Greater Noida", timing: "Open till 10pm", rating: "4.2" },
+            { name: "Jaypee Greens", location: { latitude: 28.471160763903704, longitude: 77.50117409474564 }, image: "https://indiagolfs.com/images/JP.jpg",description: "Jaypee Greens Greater Noida is a premium 182 Ha golf-centric real estate development with the finest homes in the plush locales integrated with golf courses, landscaped emerald spaces, resort living and upcoming various developments.", timing: "Open 24hrs", rating: "4.9" },
+            { name: "Buddh International Circuit", location: { latitude: 28.352552338302402, longitude: 77.5354780382061 }, image: "https://www.mappls.com/place/P0011625792_2.jpg",description: "The Buddh International Circuit is an Indian motor racing circuit, and one of the fastest circuits on the Formula One calendar", timing: "open till 6pm", rating: "4.6" },
+            { name: "India Exposition Mart", location: { latitude: 28.459331703074117, longitude: 77.49916046735332 }, image: "https://etimg.etb2bimg.com/photo/73972998.cms",description: "The India Exposition Mart is a state-of-the-art project that is equipped with infrastructure to host the biggest conferences and trade shows in India.", timing: "open till 6pm", rating: "4.5" },
+        ];
+
+        const map = L.map('map').setView([28.4744, 77.5045], 13); // Centered at Greater Noida, India
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        const mapMarkers = new Map();
+
+        // Add markers for places in Greater Noida
+        places.forEach(place => {
+            const marker = L.marker([place.location.latitude, place.location.longitude])
+                .addTo(map)
+                .bindPopup(`
+                    <b>${place.name}</b><br>
+                    <img class="popup-image" src="${place.image}" alt="${place.name} Image"><br>
+                    ${place.description}<br>
+                    <span class="more-info">
+                        <strong>Rating:</strong> ${place.rating}/5<br>
+                        <strong>Timing:</strong> ${place.timing}
+                    </span><br>
+                    <span class="more-button" onclick="toggleMoreInfo(this)">Details</span>
+                `, {
+                    maxWidth: 300, // Adjust the maximum width
+                    minWidth: 250,  // Adjust the minimum width
+                    maxHeight: 800, // Adjust the maximum height
+                    minHeight: 250  // Adjust the minimum height
+                });
+        
+            mapMarkers.set(place, marker);
+        });
+
+        function searchPlaces() {
+            const searchInput = document.getElementById('searchInput');
+            const category = searchInput.value.trim().toLowerCase();
+
+            places.forEach(place => {
+                const marker = mapMarkers.get(place);
+                if (place.name.toLowerCase().includes(category) || category === '') {
+                    marker.addTo(map);
+                } else {
+                    map.removeLayer(marker);
+                }
+            });
+        }
+
+        function navigateToSelectedPlace() {
+            const selectedPlaceName = prompt('Enter the place to navigate:');
+
+            if (selectedPlaceName) {
+                const lowerCaseSelectedPlaceName = selectedPlaceName.toLowerCase();
+                const selectedPlace = places.find(place => place.name.toLowerCase() === lowerCaseSelectedPlaceName);
+
+                if (selectedPlace) {
+                    const destination = L.latLng(selectedPlace.location.latitude, selectedPlace.location.longitude);
+
+                    L.Routing.control({
+                        waypoints: [
+                            L.latLng(28.365250339715647, 77.54094729374357),
+                            destination
+                        ],
+                        routeWhileDragging: true
+                    }).addTo(map);
+                } else {
+                    alert('Place not found!');
+                }
+            }
+        }
+
+        function toggleMoreInfo(element) {
+            const popup = element.parentElement;
+            const moreInfo = popup.querySelector('.more-info');
+            moreInfo.style.display = moreInfo.style.display === 'none' ? 'block' : 'none';
+        }
+        // ... (same functions as before)
+    </script>
+</body>
+</html>
