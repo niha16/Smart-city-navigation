@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Smart City Navigation</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.css"/>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+    }
+    #map {
+      height: 100vh;
+      width: 100%;
+    }
+    #userInfo, #navigationControls {
+      position: absolute;
+      z-index: 1000;
+      background-color: white;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+    #userInfo {
+      top: 10px;
+      left: 10px;
+    }
+    #navigationControls {
+      top: 10px;
+      right: 10px;
+    }
+    .popup-image {
+      max-width: 100%;
+      max-height: 150px;
+    }
+    .more-info { display: none; }
+    .more-button {
+      cursor: pointer;
+      color: blue;
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+
+<div id="map"></div>
+<div id="userInfo">Smart City Navigation</div>
+<div id="navigationControls">
+  <input type="text" id="searchInput" placeholder="Search Places" />
+  <button onclick="searchPlaces()">Search</button>
+  <br><br>
+  <select id="placeDropdown">
+    <option value="">Select destination</option>
+  </select>
+  <button onclick="navigateToSelectedPlace()">Navigate</button>
+</div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.js"></script>
+
+<script>
+  const map = L.map('map').setView([28.4744, 77.5045], 13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors'
+  }).addTo(map);
+
+  const places = [
+    { name: "Your Location", location: { latitude: 28.365250339715647, longitude: 77.54094729374357 }, description: "This is your current location.", image: "https://www.collegebatch.com/static/clg-gallery/galgotias-university-greater-noida-224320.jpg" },
+    { name: "Jagat Farm Market", location: { latitude: 28.481951535140045, longitude: 77.50117409474564 }, image: "https://lh5.googleusercontent.com/p/AF1QipPy7heby5w4FMK0P_MeIadsDhX0PkTx4CTUxFGp=w1080-k-no", description: "Jagat Farm is a marketplace.", timing: "Open till 10pm", rating: "4.1" },
+    { name: "City Park", location: { latitude: 28.481645792159, longitude: 77.52083219448936 }, image: "https://live-media-cdn.travalour.com/webp/b517cf69-32e1-11ea-a2af-0ec82d6f8976_600x0", description: "Largest park in Greater Noida. Beautiful & well maintained.", timing: "Open till 6pm", rating: "4.4" },
+    { name: "Alpha-I Commercial Belt", location: { latitude: 28.472506195942263, longitude: 77.50117409474564 }, image: "https://pbs.twimg.com/media/EVFUDWiUcAEkuVQ?format=jpg&name=large", description: "Commercial and residential zone", timing: "Open 24hrs", rating: "4.6" },
+    { name: "The Grand Venice Mall", location: { latitude: 28.459301267060432, longitude: 77.51831261212858 }, image: "https://digital.ihg.com/is/image/ihg/crowne-plaza-greater-noida-8223749250-2x1", description: "Italian-themed shopping mall in Greater Noida", timing: "Open till 10pm", rating: "4.2" },
+    { name: "Jaypee Greens", location: { latitude: 28.471160763903704, longitude: 77.50117409474564 }, image: "https://indiagolfs.com/images/JP.jpg", description: "Luxury real estate development with golf", timing: "Open 24hrs", rating: "4.9" },
+    { name: "Buddh International Circuit", location: { latitude: 28.352552338302402, longitude: 77.5354780382061 }, image: "https://www.mappls.com/place/P0011625792_2.jpg", description: "Indian motor racing circuit", timing: "Open till 6pm", rating: "4.6" },
+    { name: "India Exposition Mart", location: { latitude: 28.459331703074117, longitude: 77.49916046735332 }, image: "https://etimg.etb2bimg.com/photo/73972998.cms", description: "Major convention center", timing: "Open till 6pm", rating: "4.5" }
+  ];
+
+  const mapMarkers = new Map();
+  const dropdown = document.getElementById('placeDropdown');
+
+  // Add markers and populate dropdown
+  places.forEach((place, index) => {
+    const marker = L.marker([place.location.latitude, place.location.longitude])
+      .addTo(map)
+      .bindPopup(`
+        <b>${place.name}</b><br>
+        <img class="popup-image" src="${place.image}" alt="${place.name}"><br>
+        ${place.description}<br>
+        <span class="more-info">
+          <strong>Rating:</strong> ${place.rating}/5<br>
+          <strong>Timing:</strong> ${place.timing}
+        </span><br>
+        <span class="more-button" onclick="toggleMoreInfo(this)">Details</span>
+      `);
+    mapMarkers.set(place.name, marker);
+
+    // Add to dropdown (excluding "Your Location")
+    if (index > 0) {
+      const opt = document.createElement('option');
+      opt.value = place.name;
+      opt.textContent = place.name;
+      dropdown.appendChild(opt);
+    }
+  });
+
+  // Search filtering
+  function searchPlaces() {
+    const category = document.getElementById('searchInput').value.trim().toLowerCase();
+    places.forEach(place => {
+      const marker = mapMarkers.get(place.name);
+      if (place.name.toLowerCase().includes(category) || category === '') {
+        marker.addTo(map);
+      } else {
+        map.removeLayer(marker);
+      }
+    });
+  }
+
+  // Navigation logic
+  let currentLatLng = L.latLng(28.365250339715647, 77.54094729374357); // default fallback
+
+  function navigateToSelectedPlace() {
+    const placeName = dropdown.value;
+    if (!placeName) {
+      alert("Please select a destination");
+      return;
+    }
+    const selectedPlace = places.find(p => p.name === placeName);
+    const destination = L.latLng(selectedPlace.location.latitude, selectedPlace.location.longitude);
+
+    L.Routing.control({
+      waypoints: [currentLatLng, destination],
+      routeWhileDragging: true
+    }).addTo(map);
+  }
+
+  // Expand popup details
+  function toggleMoreInfo(element) {
+    const more = element.parentElement.querySelector('.more-info');
+    more.style.display = more.style.display === 'none' ? 'block' : 'none';
+  }
+
+  // Real-time geolocation
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(pos => {
+      currentLatLng = L.latLng(pos.coords.latitude, pos.coords.longitude);
+      const userMarker = L.marker(currentLatLng).addTo(map).bindPopup("You are here").openPopup();
+      map.setView(currentLatLng, 14);
+    });
+  }
+</script>
+
+</body>
+</html>
